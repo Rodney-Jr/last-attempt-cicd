@@ -1,85 +1,272 @@
-name: Deploy Static Site to EC2
-
-on:
-  push:
-    branches:
-      - main
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Deploy to EC2
-        run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes" \
-            ./ \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/html/
-
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Update & Install Nginx
-            if [ -x "$(command -v apt)" ]; then
-              sudo apt update -y
-              sudo apt install -y nginx
-            elif [ -x "$(command -v yum)" ]; then
-              sudo yum update -y
-              sudo amazon-linux-extras enable nginx1 || true
-              sudo yum install -y nginx
-            fi
-
-            # Create custom Nginx config
-            sudo tee /etc/nginx/sites-available/static_site <<EOL
-server {
-    listen 80;
-    server_name _;
-    root /var/www/html;
-
-    index index.html index.htm;
-
-    location / {
-        try_files \$uri \$uri/ =404;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cloud Computing April Cohort</title>
+  <meta name="description" content="A rich, single-file static webpage for the Cloud Computing April Cohort." />
+  <style>
+    :root {
+      --bg1: 255, 99, 132;
+      --bg2: 99, 102, 241;
+      --bg3: 56, 189, 248;
+      --glass: 255, 255, 255;
+      --ink: 20, 24, 35;
+      --primary: 99, 102, 241;
+      --accent: 56, 189, 248;
+      --glow: 255, 255, 255;
     }
-}
-EOL
 
-            # Enable new config (disable default if exists)
-            if [ -d /etc/nginx/sites-enabled ]; then
-              sudo ln -sf /etc/nginx/sites-available/static_site /etc/nginx/sites-enabled/static_site
-              sudo rm -f /etc/nginx/sites-enabled/default || true
-            else
-              sudo mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
-              sudo tee /etc/nginx/nginx.conf <<EOL
-events {}
+    * { box-sizing: border-box; }
 
-http {
-    server {
-        listen 80;
-        server_name _;
-        root /var/www/html;
-        index index.html index.htm;
-
-        location / {
-            try_files \$uri \$uri/ =404;
-        }
+    html, body {
+      height: 100%;
     }
-}
-EOL
-            fi
 
-            # Test & Reload Nginx
-            sudo nginx -t
-            sudo systemctl enable nginx
-            sudo systemctl restart nginx
-          EOF
+    body {
+      margin: 0;
+      color: rgb(var(--ink));
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(120deg, rgba(var(--bg1),0.22), rgba(var(--bg2),0.22) 40%, rgba(var(--bg3),0.22));
+      background-size: 200% 200%;
+      animation: bg-pan 18s ease-in-out infinite;
+      overflow-x: hidden;
+    }
 
+    @keyframes bg-pan {
+      0% { background-position: 0% 30%; }
+      50% { background-position: 100% 70%; }
+      100% { background-position: 0% 30%; }
+    }
+
+    /* Floating blobs */
+    .blob {
+      position: absolute;
+      width: 50vmax; height: 50vmax;
+      background: radial-gradient(circle at 30% 30%, rgba(var(--bg2),0.35), rgba(var(--bg1),0.15) 60%, transparent 70%);
+      filter: blur(40px) saturate(120%);
+      mix-blend-mode: screen;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: float 24s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .blob.b2 { left: 85%; top: 15%; animation-delay: -7s; background: radial-gradient(circle at 70% 40%, rgba(var(--bg3),0.4), rgba(var(--bg2),0.15) 60%, transparent 70%);} 
+    .blob.b1 { left: 10%; top: 80%; }
+
+    @keyframes float {
+      0%   { transform: translate(-50%, -50%) scale(1); }
+      50%  { transform: translate(-48%, -52%) scale(1.1); }
+      100% { transform: translate(-50%, -50%) scale(1); }
+    }
+
+    /* Center stage */
+    .wrap {
+      position: relative;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 6vmin;
+      isolation: isolate;
+    }
+
+    .card {
+      position: relative;
+      width: min(960px, 100%);
+      padding: clamp(24px, 5vmin, 56px);
+      border-radius: 28px;
+      background: linear-gradient(
+         180deg,
+         rgba(var(--glass), 0.75),
+         rgba(var(--glass), 0.55)
+      );
+      backdrop-filter: blur(14px) saturate(120%);
+      box-shadow:
+        0 10px 30px rgba(0,0,0,0.12),
+        0 0 0 1px rgba(255,255,255,0.35) inset;
+      overflow: hidden;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .45rem .8rem;
+      border-radius: 999px;
+      font-weight: 600;
+      background: rgba(var(--accent), 0.12);
+      border: 1px solid rgba(var(--accent), 0.25);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset;
+      letter-spacing: .02em;
+    }
+
+    .title {
+      margin: .6rem 0 0.8rem 0;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      font-size: clamp(2.4rem, 6vw, 5rem);
+      text-wrap: balance;
+      position: relative;
+    }
+
+    .title .shine {
+      background: linear-gradient(90deg, rgba(var(--ink),1) 0%, rgba(var(--ink),1) 30%, rgba(var(--primary),1) 60%, rgba(var(--ink),1) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      background-size: 200% 100%;
+      animation: shine 6s ease-in-out infinite;
+    }
+
+    @keyframes shine {
+      0% { background-position: 200% 0; }
+      50% { background-position: 0 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .lead {
+      margin: 0 0 1.25rem 0;
+      font-size: clamp(1rem, 2.2vw, 1.2rem);
+      color: rgba(var(--ink), 0.75);
+      max-width: 60ch;
+      text-wrap: pretty;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .8rem;
+      margin-top: 1.2rem;
+    }
+
+    .btn {
+      appearance: none; border: none; cursor: pointer;
+      padding: .9rem 1.1rem;
+      border-radius: 14px;
+      font-weight: 700; letter-spacing: .02em;
+      transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    }
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(var(--primary),1), rgba(var(--accent),1));
+      color: white;
+    }
+    .btn.secondary {
+      background: rgba(var(--ink), 0.06);
+      border: 1px solid rgba(var(--ink), 0.12);
+      color: rgb(var(--ink));
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:active { transform: translateY(0); }
+
+    /* Decorative orbs */
+    .orb {
+      position: absolute; inset: -60px auto auto -60px;
+      width: 220px; height: 220px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(var(--primary),0.9), rgba(var(--accent),0.9));
+      filter: blur(18px) saturate(130%);
+      opacity: .25;
+      animation: drift 10s ease-in-out infinite;
+    }
+    .orb.r { inset: auto -60px -60px auto; animation-delay: -4s; }
+
+    @keyframes drift {
+      0%   { transform: translate(0,0) scale(1); }
+      50%  { transform: translate(10px, -6px) scale(1.04); }
+      100% { transform: translate(0,0) scale(1); }
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 1.6rem;
+      font-size: .9rem;
+      color: rgba(var(--ink), 0.6);
+    }
+
+    /* Accessibility prefers-reduced-motion */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="blob b1" aria-hidden="true"></div>
+  <div class="blob b2" aria-hidden="true"></div>
+  <main class="wrap">
+    <section class="card" aria-labelledby="title">
+      <div class="orb" aria-hidden="true"></div>
+      <div class="orb r" aria-hidden="true"></div>
+
+      <span class="badge" role="img" aria-label="cloud emoji and badge">☁️ Cloud Cohort</span>
+
+      <h1 id="title" class="title" aria-live="polite">
+        <span class="shine">Cloud Computing April Cohort</span>
+      </h1>
+
+      <p class="lead">
+        Welcome! This single-file page showcases a rich, modern aesthetic using only HTML and CSS—no frameworks, no external assets. Perfect for a quick launch or a course landing screen.
+      </p>
+
+      <div class="cta-row">
+        <button class="btn primary" onclick="confetti()" aria-label="Celebrate">
+          Celebrate 🎉
+        </button>
+        <a class="btn secondary" href="#details" aria-label="Jump to details">Learn more</a>
+      </div>
+
+      <footer>
+        <span id="details">Built for the April cohort • Accessible • Responsive • Lightweight</span>
+      </footer>
+    </section>
+  </main>
+
+  <canvas id="fx" aria-hidden="true" style="position:fixed;inset:0;pointer-events:none;"></canvas>
+
+  <script>
+    // Tiny confetti without dependencies
+    const canvas = document.getElementById('fx');
+    const ctx = canvas.getContext('2d');
+    let particles = []; let raf;
+
+    function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+    addEventListener('resize', resize, { passive: true }); resize();
+
+    function confetti(){
+      const count = Math.min(120, Math.floor(innerWidth / 10));
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random()*canvas.width,
+          y: -10,
+          s: Math.random()*4 + 2,
+          r: Math.random()*Math.PI*2,
+          v: Math.random()*2 + 1.5,
+          w: (Math.random()*0.1 - 0.05),
+          o: 1
+        });
+      }
+      if (!raf) loop();
+    }
+
+    function loop(){
+      raf = requestAnimationFrame(loop);
+      ctx.clearRect(0,0,canvas.width, canvas.height);
+      for (let p of particles) {
+        p.y += p.v; p.r += p.w; p.o -= 0.006;
+        ctx.globalAlpha = Math.max(p.o, 0);
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        ctx.fillStyle = `hsl(${(p.x/innerWidth)*360}, 90%, 60%)`;
+        ctx.fillRect(-p.s/2, -p.s/2, p.s, p.s*0.6);
+        ctx.restore();
+      }
+      particles = particles.filter(p => p.o > 0 && p.y < canvas.height + 12);
+      if (particles.length === 0) { cancelAnimationFrame(raf); raf = null; }
+      ctx.globalAlpha = 1;
+    }
+
+    // Auto fire once on load for flair
+    addEventListener('load', () => setTimeout(confetti, 600));
+  </script>
+</body>
+</html>
