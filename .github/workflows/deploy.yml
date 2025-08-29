@@ -28,7 +28,7 @@ jobs:
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/html/
 
           ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Update system
+            # Update & Install Nginx
             if [ -x "$(command -v apt)" ]; then
               sudo apt update -y
               sudo apt install -y nginx
@@ -38,50 +38,48 @@ jobs:
               sudo yum install -y nginx
             fi
 
-            # Enable and start nginx
-            sudo systemctl enable nginx
-            sudo systemctl start nginx
-
-            # Create a clean nginx config
-            SITE_NAME=static-site
-            CONF_FILE="/etc/nginx/sites-available/$SITE_NAME"
-
-            # For Ubuntu/Debian (sites-available/sites-enabled structure)
-            if [ -d "/etc/nginx/sites-available" ]; then
-              sudo tee $CONF_FILE > /dev/null <<EOL
+            # Create custom Nginx config
+            sudo tee /etc/nginx/sites-available/static_site <<EOL
 server {
     listen 80;
     server_name _;
-
     root /var/www/html;
-    index index.html;
+
+    index index.html index.htm;
 
     location / {
         try_files \$uri \$uri/ =404;
     }
 }
 EOL
-              sudo ln -sf $CONF_FILE /etc/nginx/sites-enabled/
-              sudo rm -f /etc/nginx/sites-enabled/default
+
+            # Enable new config (disable default if exists)
+            if [ -d /etc/nginx/sites-enabled ]; then
+              sudo ln -sf /etc/nginx/sites-available/static_site /etc/nginx/sites-enabled/static_site
+              sudo rm -f /etc/nginx/sites-enabled/default || true
             else
-              # For Amazon Linux / CentOS (default config at nginx.conf)
-              sudo tee /etc/nginx/conf.d/$SITE_NAME.conf > /dev/null <<EOL
-server {
-    listen 80;
-    server_name _;
+              sudo mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+              sudo tee /etc/nginx/nginx.conf <<EOL
+events {}
 
-    root /var/www/html;
-    index index.html;
+http {
+    server {
+        listen 80;
+        server_name _;
+        root /var/www/html;
+        index index.html index.htm;
 
-    location / {
-        try_files \$uri \$uri/ =404;
+        location / {
+            try_files \$uri \$uri/ =404;
+        }
     }
 }
 EOL
             fi
 
-            # Test and reload nginx
+            # Test & Reload Nginx
             sudo nginx -t
-            sudo systemctl reload nginx
+            sudo systemctl enable nginx
+            sudo systemctl restart nginx
           EOF
 
