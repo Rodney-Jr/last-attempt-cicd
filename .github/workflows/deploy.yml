@@ -1,4 +1,4 @@
-name: Deploy Static Website to EC2
+name: Deploy Static Site to EC2
 
 on:
   push:
@@ -10,34 +10,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      # Step 2: Copy HTML file to EC2
-      - name: Deploy index.html to EC2
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+      - name: Setup SSH
         run: |
-          echo "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-          # Copy index.html to EC2's web root
-          scp -o StrictHostKeyChecking=no -i private_key.pem index.html $EC2_USER@$EC2_HOST:/var/www/html/index.html
-
-      # Step 3: Restart web server (optional)
-      - name: Restart Web Server
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+      - name: Deploy Website to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST "
-            if command -v nginx > /dev/null; then
-              sudo systemctl restart nginx
-            elif command -v apache2 > /dev/null; then
-              sudo systemctl restart apache2
+          # Sync files to EC2 web directory
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes" \
+            ./ \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/var/www/html/
+
+          # Install & restart nginx if not already running
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            if [ -x "$(command -v apt)" ]; then
+              sudo apt update -y
+              sudo apt install -y nginx
+            elif [ -x "$(command -v yum)" ]; then
+              sudo yum update -y
+              sudo amazon-linux-extras enable nginx1 || true
+              sudo yum install -y nginx
             fi
-          "
+
+            # Enable & restart nginx
+            sudo systemctl enable nginx
+            sudo systemctl restart nginx
+          EOF
