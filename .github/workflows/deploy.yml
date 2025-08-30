@@ -21,8 +21,8 @@ jobs:
           EC2_USER: ${{ secrets.EC2_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
-          echo "$SSH_PRIVATE_KEY" > cicddemo.pem
-          chmod 600 cicddemo.pem
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
 
           # Copy index.html to EC2's web root
           scp -o StrictHostKeyChecking=no -i private_key.pem index.html $EC2_USER@$EC2_HOST:/var/www/html/index.html
