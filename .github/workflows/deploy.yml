@@ -27,7 +27,7 @@ jobs:
             ./ \
             "${{ secrets.EC2_USER }}"@"${{ secrets.EC2_HOST }}":/var/www/html/
 
-          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes "${{ secrets.EC2_USER }}"@"${{ secrets.EC2_HOST }}" << 'REMOTE_EOF'
+          ssh -i ~/.ssh/ec2_key -o StrictHostKeyChecking=yes "${{ secrets.EC2_USER }}"@"${{ secrets.EC2_HOST }}" bash <<'EOF'
             # Install Nginx if missing
             if [ -x "$(command -v apt)" ]; then
               sudo apt update -y
@@ -38,7 +38,7 @@ jobs:
               sudo yum install -y nginx
             fi
 
-            # Overwrite Nginx default config with cache-busting headers
+            # Overwrite Nginx default config
             sudo tee /etc/nginx/conf.d/default.conf > /dev/null <<'NGINX_CONF'
 server {
     listen 80 default_server;
@@ -59,8 +59,8 @@ server {
 }
 NGINX_CONF
 
-            # Test config and reload Nginx
+            # Test and restart nginx
             sudo nginx -t
             sudo systemctl enable nginx
             sudo systemctl restart nginx
-REMOTE_EOF
+EOF
